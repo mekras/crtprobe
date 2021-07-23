@@ -27,9 +27,13 @@ crtprobe local:check
 Команды для проверки удалённых серверов
 ---------------------------------------
 
-crtprobe remote:protocols <хост>
+crtprobe remote:info <хост>
 
-    Определяет протоколы, шифры и алгоритмы, поддерживаемые удалённым сервером.
+    Выводит сведения об удалённом хосте.
+
+crtprobe remote:test <хост>
+
+    Проверяет возможности по использованию TLS/SSL при работе с указанным хостом.
 
 EOF
 }
@@ -120,11 +124,11 @@ localCheck() {
 }
 
 ##
-# Определяет протоколы, шифры и алгоритмы, поддерживаемые удалённым сервером.
+# Выводит сведения об удаленном хосте.
 #
 # @param $1 Имя хоста, который надо проверить.
 #
-remoteProtocolsCommand() {
+remoteInfoCommand() {
   readonly hostname="${1}"
   if [ -z "${hostname}" ]; then
     invalidUsage 'Не указано имя хоста.'
@@ -134,6 +138,49 @@ remoteProtocolsCommand() {
 
   if [ ${caps_nmap} ]; then
     nmap --script ssl-enum-ciphers -p 443 "${hostname}"
+  else
+    cprint warning "Пропускаю проверки, требующие nmap.\n"
+  fi
+}
+
+##
+# Проверяет возможности по использованию TLS/SSL при работе с указанным хостом.
+#
+# @param $1 Имя хоста, который надо проверить.
+#
+remoteTestCommand() {
+  readonly hostname="${1}"
+  if [ -z "${hostname}" ]; then
+    invalidUsage 'Не указано имя хоста.'
+  fi
+
+  localCheck; echo
+
+  cprint info "Проверяю возможности по взаимодействию локальной системы с «%s»…\n" "${hostname}"
+
+  if [ ${caps_openssl} ]; then
+    cprint info '- TLS 1.0: '
+    if echo 'Q' | openssl s_client -connect www.example.com:443 -tls1 >/dev/null 2>&1; then
+      cprint success "возможно\n"
+    else
+      cprint error "невозможно\n"
+    fi
+
+    cprint info '- TLS 1.1: '
+    if echo 'Q' | openssl s_client -connect www.example.com:443 -tls1_1 >/dev/null 2>&1; then
+      cprint success "возможно\n"
+    else
+      cprint error "невозможно\n"
+    fi
+
+    cprint info '- TLS 1.2: '
+    if echo 'Q' | openssl s_client -connect www.example.com:443 -tls1_2 >/dev/null 2>&1; then
+      cprint success "возможно\n"
+    else
+      cprint error "невозможно\n"
+    fi
+  else
+    cprint warning "Пропускаю проверки, требующие openssl.\n"
   fi
 }
 
@@ -143,8 +190,11 @@ case ${command} in
   'local:check')
     localCheck
     ;;
-  'remote:protocols')
-    remoteProtocolsCommand "${2}"
+  'remote:info')
+    remoteInfoCommand "${2}"
+    ;;
+  'remote:test')
+    remoteTestCommand "${2}"
     ;;
   *)
     printUsage
