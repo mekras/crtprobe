@@ -138,14 +138,13 @@ remoteProtocolsCommand() {
 }
 
 readonly command="${1}"
-shift
 
 case ${command} in
   'local:check')
     localCheck
     ;;
   'remote:protocols')
-    remoteProtocolsCommand "${1}"
+    remoteProtocolsCommand "${2}"
     ;;
   *)
     printUsage
