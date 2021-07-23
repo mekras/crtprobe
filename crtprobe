@@ -98,12 +98,12 @@ invalidUsage() {
 localCheck() {
   cprint info "Проверяю локальную систему…\n"
 
-  cprint info '⋅ openssl: '
+  cprint info '- openssl: '
   if command -v openssl >/dev/null; then
     cprint success "есть\n"
     caps_openssl=1
 
-    cprint info '  ⋅ Поддержка алгоритмов ГОСТ: '
+    cprint info '  - Поддержка алгоритмов ГОСТ: '
     if openssl engine -t gost >/dev/null 2>&1; then
       cprint success "есть\n"
       caps_openssl_gost=1
@@ -114,7 +114,7 @@ localCheck() {
     cprint error "не найдено\n"
   fi
 
-  cprint info '⋅ nmap: '
+  cprint info '- nmap: '
   if command -v nmap >/dev/null; then
     cprint success "есть\n"
     caps_nmap=1
@@ -160,21 +160,21 @@ remoteTestCommand() {
 
   if [ ${caps_openssl} ]; then
     cprint info '- TLS 1.0: '
-    if echo 'Q' | openssl s_client -connect www.example.com:443 -tls1 >/dev/null 2>&1; then
+    if echo 'Q' | openssl s_client -connect "${hostname}:443" -tls1 >/dev/null 2>&1; then
       cprint success "возможно\n"
     else
       cprint error "невозможно\n"
     fi
 
     cprint info '- TLS 1.1: '
-    if echo 'Q' | openssl s_client -connect www.example.com:443 -tls1_1 >/dev/null 2>&1; then
+    if echo 'Q' | openssl s_client -connect "${hostname}:443" -tls1_1 >/dev/null 2>&1; then
       cprint success "возможно\n"
     else
       cprint error "невозможно\n"
     fi
 
     cprint info '- TLS 1.2: '
-    if echo 'Q' | openssl s_client -connect www.example.com:443 -tls1_2 >/dev/null 2>&1; then
+    if echo 'Q' | openssl s_client -connect "${hostname}:443" -tls1_2 >/dev/null 2>&1; then
       cprint success "возможно\n"
     else
       cprint error "невозможно\n"
