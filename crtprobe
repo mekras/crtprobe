@@ -114,12 +114,8 @@ localCheck() {
     cprint error "не найдено\n"
   fi
 
-  cprint info '- nmap: '
   if command -v nmap >/dev/null; then
-    cprint success "есть\n"
     caps_nmap=1
-  else
-    cprint error "не найдено\n"
   fi
 }
 
@@ -139,7 +135,7 @@ remoteInfoCommand() {
   if [ ${caps_nmap} ]; then
     nmap --script ssl-enum-ciphers -p 443 "${hostname}"
   else
-    cprint warning "Пропускаю проверки, требующие nmap.\n"
+    cprint error "Для этого действия в системе должна быть установлена утилита nmap.\n"
   fi
 }
 
