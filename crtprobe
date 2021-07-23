@@ -1,0 +1,153 @@
+#!/bin/sh
+
+caps_nmap=
+caps_openssl=
+caps_openssl_gost=
+
+##
+# Выводит подсказку по использованию утилиты.
+#
+printUsage() {
+  cat <<EOF
+
+Инструмент для анализа возможностей по работе с сертификатами X509 и TLS/SSL.
+
+Использование:
+
+    crtprobe <команда> [аргументы]
+
+Команды для проверки локальной системы
+--------------------------------------
+
+crtprobe local:check
+
+    Определяет возможности локальной системы. Запускается автоматически перед выполнением
+    большинства других команд.
+
+Команды для проверки удалённых серверов
+---------------------------------------
+
+crtprobe remote:protocols <хост>
+
+    Определяет протоколы, шифры и алгоритмы, поддерживаемые удалённым сервером.
+
+EOF
+}
+
+##
+# Выводит сообщение указанным цветом.
+#
+# @param $1 Имя цвета.
+# @param $2 Шаблон сообщения.
+# @param $… Аргументы для подстановки в шаблон.
+#
+cprint() {
+  color=${1}
+  shift
+  message=${1}
+  shift
+
+  case "${color}" in
+    'error') color='light_red' ;;
+    'info') color='cyan' ;;
+    'success') color='light_green' ;;
+    'warning') color='brown' ;;
+  esac
+
+  code=''
+  case "${color}" in
+    'black') code="\e[30m" ;;
+    'red') code="\e[31m" ;;
+    'green') code="\e[32m" ;;
+    'brown') code="\e[33m" ;;
+    'blue') code="\e[34m" ;;
+    'magenta') code="\e[35m" ;;
+    'cyan') code="\e[36m" ;;
+    'light_gray') code="\e[37m" ;;
+    'dark_gray') code="\e[1;30m" ;;
+    'light_red') code="\e[1;31m" ;;
+    'light_green') code="\e[1;32m" ;;
+    'yellow') code="\e[1;33m" ;;
+    'light_blue') code="\e[1;34m" ;;
+    'light_magenta') code="\e[1;35m" ;;
+    'light_cyan') code="\e[1;36m" ;;
+    'white') code="\e[1;37m" ;;
+  esac
+
+  printf "${code}${message}\e[0m" "$*"
+}
+
+##
+# Сообщает о неправильном использовании утилиты и прерывает выполнение.
+#
+# @param $1 Сообщение об ошибке.
+#
+invalidUsage() {
+  cprint error "Неправильный вызов команды. %s" "${1}" >&2
+  echo 'Запустите crtprobe без аргументов чтобы получить подсказку.' >&2
+  exit 1
+}
+
+##
+# Определяет возможности локальной системы.
+#
+localCheck() {
+  cprint info "Проверяю локальную систему…\n"
+
+  cprint info '⋅ openssl: '
+  if command -v openssl >/dev/null; then
+    cprint success "есть\n"
+    caps_openssl=1
+
+    cprint info '  ⋅ Поддержка алгоритмов ГОСТ: '
+    if openssl engine -t gost >/dev/null 2>&1; then
+      cprint success "есть\n"
+      caps_openssl_gost=1
+    else
+      cprint error "нет\n"
+    fi
+  else
+    cprint error "не найдено\n"
+  fi
+
+  cprint info '⋅ nmap: '
+  if command -v nmap >/dev/null; then
+    cprint success "есть\n"
+    caps_nmap=1
+  else
+    cprint error "не найдено\n"
+  fi
+}
+
+##
+# Определяет протоколы, шифры и алгоритмы, поддерживаемые удалённым сервером.
+#
+# @param $1 Имя хоста, который надо проверить.
+#
+remoteProtocolsCommand() {
+  readonly hostname="${1}"
+  if [ -z "${hostname}" ]; then
+    invalidUsage 'Не указано имя хоста.'
+  fi
+
+  localCheck
+
+  if [ ${caps_nmap} ]; then
+    nmap --script ssl-enum-ciphers -p 443 "${hostname}"
+  fi
+}
+
+readonly command="${1}"
+shift
+
+case ${command} in
+  'local:check')
+    localCheck
+    ;;
+  'remote:protocols')
+    remoteProtocolsCommand "${1}"
+    ;;
+  *)
+    printUsage
+    ;;
+esac
