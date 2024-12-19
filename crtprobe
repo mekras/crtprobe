@@ -79,7 +79,7 @@ cprint() {
     'white') cprint_code="\e[1;37m" ;;
   esac
 
-  printf "${cprint_code}${cprint_message}\e[0m" "$*"
+  printf "${cprint_code}${cprint_message}\e[0m" "$@"
 }
 
 ##
@@ -96,18 +96,24 @@ invalidUsage() {
 ##
 # Проверяет возможность подключиться к узлу используя openssl -connect
 #
-# @param $1 Сокет для подключения.
+# @param $1 Адрес узла.
+# @param $2 Порт.
 # @param … Дополнительные ключи для openssl.
 #
 checkOpensslConnect() {
-  openssl_connect_socket="${1}"
+  openssl_connect_host="${1}"
   shift
-  if [ -z "${openssl_connect_socket}" ]; then
-    invalidUsage 'Не указан сокет для подключения.'
+  if [ -z "${openssl_connect_host}" ]; then
+    invalidUsage 'Не указан адрес узла для подключения.'
+  fi
+  openssl_connect_port="${1}"
+  shift
+  if [ -z "${openssl_connect_port}" ]; then
+    invalidUsage 'Не указан порт для подключения.'
   fi
 
   openssl_connect_buffer=$(mktemp --tmpdir crtprobe.XXXXX)
-  if ! echo 'Q' | openssl s_client -verify_return_error -connect "${openssl_connect_socket}" "${*}" >"${openssl_connect_buffer}" 2>&1; then
+  if ! echo 'Q' | openssl s_client -verify_return_error -connect "${openssl_connect_host}:${openssl_connect_port}" "${*}" >"${openssl_connect_buffer}" 2>&1; then
     # См. https://kb.itzecurity.com/2015/08/ssltls-alert-protocol-alert-codes-pac.html
     if grep 'SSL alert number 70' "${openssl_connect_buffer}" >/dev/null; then
       cprint error "Версия протокола не поддерживается.\n"
@@ -155,28 +161,32 @@ localCheck() {
     cprint error "не найдено\n"
   fi
 
+  cprint info '- nmap: '
   if command -v nmap >/dev/null; then
+    cprint success "есть\n"
     caps_nmap=1
+  else
+    cprint error "не найдено\n"
   fi
 }
 
 ##
 # Выводит сведения об удаленном узле
 #
-# @param $1 Имя узла.
+# @param $1 Адрес узла.
 # @param $2 Порт (по умолчанию 443).
 #
 remoteInfoCommand() {
-  remote_info_socket="${1}"
-  if [ -z "${remote_info_socket}" ]; then
-    invalidUsage 'Не указано имя хоста.'
+  remote_info_host="${1}"
+  if [ -z "${remote_info_host}" ]; then
+    invalidUsage 'Не указан адрес узла.'
   fi
   remote_info_port="${2:-443}"
 
   localCheck
 
   if [ ${caps_nmap} ]; then
-    nmap --script ssl-enum-ciphers -p "${remote_info_port}" "${remote_info_socket}"
+    nmap --script ssl-enum-ciphers -p "${remote_info_port}" "${remote_info_host}"
   else
     cprint error "Для этого действия в системе должна быть установлена утилита nmap.\n"
   fi
@@ -185,30 +195,33 @@ remoteInfoCommand() {
 ##
 # Проверяет возможности по использованию TLS/SSL при работе с указанным узлом.
 #
-# @param $1 Сокет для подключения.
+# @param $1 Адрес узла.
+# @param $2 Порт (по умолчанию 443).
 #
 remoteTestCommand() {
-  remote_test_socket="${1}"
-  if [ -z "${remote_test_socket}" ]; then
-    invalidUsage 'Не указан сокет для подключения.'
+  remote_test_host="${1}"
+  shift
+  if [ -z "${remote_test_host}" ]; then
+    invalidUsage 'Не указан адрес узла.'
   fi
+  remote_test_port="${1:-443}"
 
   localCheck; echo
 
-  cprint info "Проверяю возможности по взаимодействию локальной системы с «%s»…\n" "${remote_test_socket}"
+  cprint info "Проверяю возможности по взаимодействию локальной системы с «%s:%s»…\n" "${remote_test_host}" "${remote_test_port}"
 
   if [ ${caps_openssl} ]; then
     cprint info "\nTLS 1.0\n━━━━━━━\n"
-    checkOpensslConnect "${remote_test_socket}" -tls1
+    checkOpensslConnect "${remote_test_host}" "${remote_test_port}" -tls1
 
     cprint info "\nTLS 1.1\n━━━━━━━\n"
-    checkOpensslConnect "${remote_test_socket}" -tls1_1
+    checkOpensslConnect "${remote_test_host}" "${remote_test_port}" -tls1_1
 
     cprint info "\nTLS 1.2\n━━━━━━━\n"
-    checkOpensslConnect "${remote_test_socket}" -tls1_2
+    checkOpensslConnect "${remote_test_host}" "${remote_test_port}" -tls1_2
 
     cprint info "\nTLS 1.3\n━━━━━━━\n"
-    checkOpensslConnect "${remote_test_socket}" -tls1_3
+    checkOpensslConnect "${remote_test_host}" "${remote_test_port}" -tls1_3
   else
     cprint warning "Пропускаю проверки, требующие openssl.\n"
   fi
@@ -221,10 +234,10 @@ case ${command} in
     localCheck
     ;;
   'remote:info')
-    remoteInfoCommand "${2}"
+    remoteInfoCommand "${2}" "${3}"
     ;;
   'remote:test')
-    remoteTestCommand "${2}:443"
+    remoteTestCommand "${2}" "${3}"
     ;;
   *)
     printUsage
