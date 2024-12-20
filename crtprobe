@@ -113,25 +113,39 @@ checkOpensslConnect() {
   fi
 
   openssl_connect_buffer=$(mktemp --tmpdir crtprobe.XXXXX)
-  if ! echo 'Q' | openssl s_client -verify_return_error -connect "${openssl_connect_host}:${openssl_connect_port}" "${*}" >"${openssl_connect_buffer}" 2>&1; then
+  if ! echo 'Q' | openssl s_client -verify_return_error -timeout -brief -connect "${openssl_connect_host}:${openssl_connect_port}" "${*}" >"${openssl_connect_buffer}" 2>&1; then
+    cat "${openssl_connect_buffer}"
+    echo
     # См. https://kb.itzecurity.com/2015/08/ssltls-alert-protocol-alert-codes-pac.html
-    if grep 'SSL alert number 70' "${openssl_connect_buffer}" >/dev/null; then
-      cprint error "Версия протокола не поддерживается.\n"
+    #     https://badssl.com/
+    if grep 'error:num=10' "${openssl_connect_buffer}" >/dev/null; then
+      cprint error "Истёк срок действия сертификата.\n"
+    elif grep 'error:num=18' "${openssl_connect_buffer}" >/dev/null; then
+      cprint error "Узел использует самоподписанный сертификат.\n"
+    elif grep 'error:num=19' "${openssl_connect_buffer}" >/dev/null; then
+      cprint error "В цепочке сертификатов обнаружен самоподписанный сертификат.\n"
+    elif grep 'SSL alert number 40' "${openssl_connect_buffer}" >/dev/null; then
+      cprint error "Не удалось согласовать приемлемый набор параметров безопасности с учётом доступных опций.\n"
+      cprint default "\nНекоторые возможные причины:\n"
+      cprint default "• Сервер не поддерживает запрошенный протокол или шифр.\n"
+    elif grep 'SSL alert number 70' "${openssl_connect_buffer}" >/dev/null; then
+      cprint warning "Версия протокола не поддерживается.\n"
     elif grep 'unable to get local issuer certificate' "${openssl_connect_buffer}" >/dev/null; then
-      cprint error "Недоверенный сертификат.\n\n"
-      cprint default "Некоторые возможные причины:\n"
+      cprint error "Недоверенный сертификат.\n"
+      cprint default "\nНекоторые возможные причины:\n"
       cprint default "• Не сервере не настроена полная цепочка сертификатов.\n"
       cprint default "• Используется самоподписанный сертификат, и для работы с узлом надо установить дополнительный сертификат.\n"
+      cprint default "• В вашей системе нет нужного корневого сертификата.\n"
     elif grep 'no peer certificate available' "${openssl_connect_buffer}" >/dev/null; then
       cprint error "Сервер закрыл соединение.\n\n"
-      cprint default "Сервер немедленно закрывает соединение после его установления, что препятствует любой дальнейшей коммуникации.\n"
-      cprint default "Некоторые возможные причины:\n"
+      cprint default "\nНекоторые возможные причины:\n"
       cprint default "• Неправильная конфигурация сервера: сертификаты TLS/SSL могут быть просрочены или неправильно настроены.\n"
       cprint default "• Брандмауэр или политика безопасности могут принимать соединения, но сразу же их закрывать. Сервер может быть настроен на приём соединений только с определённых адресов IP или сетей.\n"
       cprint default "• Сервер может поддерживать только определённые версии TLS/SSL или шифры, которые не совместимы с настройками клиента OpenSSL.\n"
+    elif grep 'dh key too small' "${openssl_connect_buffer}" >/dev/null; then
+      cprint error "Слишком маленький размер ключа.\n"
     else
-      cprint error "Неизвестная ошибка:\n\n"
-      cat "${openssl_connect_buffer}"
+      cprint error "Неизвестная ошибка.\n"
     fi
     return 1
   fi
@@ -225,6 +239,7 @@ remoteTestCommand() {
   else
     cprint warning "Пропускаю проверки, требующие openssl.\n"
   fi
+  echo
 }
 
 readonly command="${1}"
